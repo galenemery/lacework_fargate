@@ -1,0 +1,373 @@
+# redis
+--- 
+apiVersion: v1
+kind: Service
+metadata: 
+  labels: 
+    app: redis
+  name: redis
+spec: 
+  clusterIP: None
+  ports:
+  - name: redis-service
+    port: 6379
+    targetPort: 6379
+  selector: 
+    app: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      #Create an empty shared volume between the two containers
+      volumes:
+      - name: lacework-shared 
+        emptyDir: {}
+      # Lacework container
+      initContainers:
+      - name: lacework-sidecar
+        # Lacework sidecar image.
+        # Point the image to your appropriate sidecar image location
+        image: 950194951070.dkr.ecr.us-west-2.amazonaws.com/galen-lw-sidecar
+        command: ["/bin/sh"]
+        args: ["-c", "cp -R /shared/* /lacework"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /lacework
+    
+      #Application container(s) in the pod
+      containers:
+
+      - name: redis
+        image: redis:alpine
+        command: ["/shared/lacework.sh","docker-entrypoint.sh"]
+        args: ["redis-server"]
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /shared
+
+# db
+--- 
+apiVersion: v1
+kind: Service
+metadata: 
+  labels: 
+    app: db
+  name: db
+spec: 
+  clusterIP: None
+  ports: 
+  - name: db
+    port: 5432
+    targetPort: 5432
+  selector: 
+    app: db
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    app: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      #Create an empty shared volume between the two containers
+      volumes:
+      - name: lacework-shared 
+        emptyDir: {}
+      # - name: db-data
+      #   persistentVolumeClaim:
+      #     claimName: postgres-pv-claim      # Lacework container
+      initContainers:
+      - name: lacework-sidecar
+        # Lacework sidecar image.
+        # Point the image to your appropriate sidecar image location
+        image: 950194951070.dkr.ecr.us-west-2.amazonaws.com/galen-lw-sidecar
+        command: ["/bin/sh"]
+        args: ["-c", "cp -R /shared/* /lacework"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /lacework
+    
+      #Application container(s) in the pod
+      containers:
+      - name: db
+        image: postgres:9.4
+        env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
+        - name: POSTGRES_HOST_AUTH_METHOD
+          value: trust
+        command: ["/shared/lacework.sh","/docker-entrypoint.sh"]
+        args: ["postgres"]
+        ports:
+        - containerPort: 5432
+          name: db
+        volumeMounts:
+        # - name: db-data
+        #   mountPath: /var/lib/postgresql/data
+        - name: lacework-shared
+          mountPath: /shared
+
+          
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+# result
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: result
+  labels:
+    app: result
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 5001
+    targetPort: 80
+    name: result-service
+  selector:
+    app: result
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: result
+  labels:
+    app: result
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: result
+  template:
+    metadata:
+      labels:
+        app: result
+    spec:
+      #Create an empty shared volume between the two containers
+      volumes:
+      - name: lacework-shared 
+        emptyDir: {}
+      # Lacework container
+      initContainers:
+      - name: lacework-sidecar
+        # Lacework sidecar image.
+        # Point the image to your appropriate sidecar image location
+        image: 950194951070.dkr.ecr.us-west-2.amazonaws.com/galen-lw-sidecar
+        command: ["/bin/sh"]
+        args: ["-c", "cp -R /shared/* /lacework"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /lacework
+    
+      #Application container(s) in the pod
+      containers:
+      - name: result
+        image: lars2893/mobiaresult:0.0.1
+        imagePullPolicy: Always
+        command: ["/shared/lacework.sh","docker-entrypoint.sh"]
+        args: ["/tini","--","node","server.js"]
+        ports:
+        - containerPort: 80
+          name: result
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /shared
+
+# vote
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vote
+  labels:
+    apps: vote
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+      name: vote-service
+  selector:
+    app: vote
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vote
+  labels:
+    app: vote
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vote
+  template:
+    metadata:
+      labels:
+        app: vote
+    spec:
+      #Create an empty shared volume between the two containers
+      volumes:
+      - name: lacework-shared 
+        emptyDir: {}
+      # Lacework container
+      initContainers:
+      - name: lacework-sidecar
+        # Lacework sidecar image.
+        # Point the image to your appropriate sidecar image location
+        image: 950194951070.dkr.ecr.us-west-2.amazonaws.com/galen-lw-sidecar
+        command: ["/bin/sh"]
+        args: ["-c", "cp -R /shared/* /lacework"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /lacework
+    
+      #Application container(s) in the pod
+      containers:
+      - name: vote
+        image: lars2893/mobiavote:0.0.1
+        imagePullPolicy: Always
+        # This container does not use entrypoint, so there's nothing else required here
+        command: ["/shared/lacework.sh"]
+        args: ["gunicorn","app:app","-b","0.0.0.0:80","--log-file","-","--access-logfile","-","--workers","4","--keep-alive","0"]
+        ports:
+        - containerPort: 80
+          name: vote
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /shared
+
+# worker
+--- 
+apiVersion: v1
+kind: Service
+metadata: 
+  labels: 
+    apps: worker
+  name: worker
+spec: 
+  clusterIP: None
+  selector: 
+    app: worker
+--- 
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  labels: 
+    app: worker
+  name: worker
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template: 
+    metadata: 
+      labels: 
+        app: worker
+    spec:
+      #Create an empty shared volume between the two containers
+      volumes:
+      - name: lacework-shared 
+        emptyDir: {}
+      # Lacework container
+      initContainers:
+      - name: lacework-sidecar
+        # Lacework sidecar image.
+        # Point the image to your appropriate sidecar image location
+        image: 950194951070.dkr.ecr.us-west-2.amazonaws.com/galen-lw-sidecar
+        command: ["/bin/sh"]
+        args: ["-c", "cp -R /shared/* /lacework"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /lacework
+    
+      #Application container(s) in the pod
+      containers:
+      - image: lars2893/mobiaworker:0.0.1
+        imagePullPolicy: Always
+        name: worker
+        command: ["/shared/lacework.sh","dotnet","Worker.dll"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /shared
+# maintenance
+# --- 
+# apiVersion: v1
+# kind: Service
+# metadata: 
+#   labels: 
+#     apps: maintenance
+#   name: maintenance
+# spec: 
+#   clusterIP: None
+#   selector: 
+#     app: maintenance
+# --- 
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata: 
+#   labels: 
+#     app: maintenance
+#   name: maintenance
+# spec: 
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: maintenance
+#   template: 
+#     metadata: 
+#       labels: 
+#         app: maintenance
+#     spec: 
+#       containers: 
+#       - image: ubuntu
+#         command: ["tail"]
+#         args: ["-f","/dev/null"]
+#         env:
+#         - name: AWS_ACCESS_KEY_ID
+#           value: AKIA35U2TGKSG6XGJRNV
+#         - name: AWS_SECRET_ACCESS_KEY
+#           value: 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
+#         - name: AWS_DEFAULT_REGION
+#           value: us-west-2
+#         name: maintenance

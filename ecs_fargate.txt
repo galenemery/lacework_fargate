@@ -1,0 +1,47 @@
+ECS Fargate
+
+- nginx base config
+-- Make sure to give full path (OR change nginx config to point to appropriate path)
+-- CMD ["nginx" "-g" "daemon off;"]
+
+1) Build simple nginx website
+Dockerfile
+```
+FROM nginx
+COPY website/ /usr/share/nginx/html
+```
+
+2) build & run nginx container
+docker build -t simple-nginx .
+docker run --name {unique-name} -d -p 8080:80 simple-nginx
+-- navigate to http://localhost:8080 (see default config)
+-- Alt: http://localhost:8080/default.html (or change nginx config to default to this)
+
+3) Upload container to ECR
+# Note: Specify profile in first half, if necessary
+aws ecr get-login-password --region us-west-2 --profile {your_aws_profile} | docker login --username AWS --password-stdin 950194951070.dkr.ecr.us-west-2.amazonaws.com
+
+#tag & push image (replace simple-nginx)
+docker tag simple-nginx:latest 950194951070.dkr.ecr.us-west-2.amazonaws.com/simple-nginx:latest
+docker push 950194951070.dkr.ecr.us-west-2.amazonaws.com/simple-nginx:latest
+
+4) Build task definition
+- Follow docs
+- Start w/ nginx container only
+
+5) Build Lacework sidecar
+- Pull Dockerfile from: https://gist.github.com/jvogt/024b2511685d9c084cbdebf22084af13#file-dockerfile
+- Pull lacework.sh from: https://gist.github.com/jvogt/024b2511685d9c084cbdebf22084af13#file-lacework-sh
+-- Modify access_token for your tenant
+docker build -t lw-sidecar .
+docker tag lw-sidecar:latest 950194951070.dkr.ecr.us-west-2.amazonaws.com/{yourname}-lw-sidecar:latest
+docker push 950194951070.dkr.ecr.us-west-2.amazonaws.com/{yourname}-lw-sidecar:latest
+
+6) Update Task definition w/ sidecar
+-nginx container
+-- volumesfrom (lw-sidecar)
+-- dependson (lw-sidecar|success)
+-- entrypoint [/shared/lacework.sh,{app entrypoint}]
+-- cmd {app_container_cmd}]
+
+

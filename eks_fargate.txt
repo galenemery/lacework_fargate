@@ -1,0 +1,11 @@
+Deploying a workload to EKS Fargate
+
+1) Deploy an EKS Fargate Cluster
+-- Make sure you use the same creds throughout (either setup CLI w/ Okta, or use CLI/IAM User)
+
+- install eksctl (insert docs)
+- run command eksctl create cluster  --name galen-eksfargate --region us-west-2 --fargate
+- verify install 
+-- kubectl get nodes -o wide
+-- kubectl get pods --all-namespaces -o wide
+
