@@ -1,11 +1,28 @@
 Deploying a workload to EKS Fargate
 
 1) Deploy an EKS Fargate Cluster
--- Make sure you use the same creds throughout (either setup CLI w/ Okta, or use CLI/IAM User)
+-- Make sure you use the same creds throughout (either setup CLI w/ Okta, or use CLI/IAM User).  If you DONT, you will have a real pain in the ass time in authenticating to your cluster.
 
 - install eksctl (insert docs)
-- run command eksctl create cluster  --name galen-eksfargate --region us-west-2 --fargate
-- verify install 
--- kubectl get nodes -o wide
--- kubectl get pods --all-namespaces -o wide
+
+
+command `eksctl create cluster  --name galen-eksfargate --region us-west-2 --fargate`
+
+Installation Verification:
+`kubectl get nodes -o wide` 
+
+you should see your fargate nodes.
+
+`kubectl get pods --all-namespaces -o wide`
+
+you should see some default amazon pods like coredns, etc.
+
+Once you have the cluster up, you can either validate deployments by deploying a simple workload to the system.  In this repository, that would be the `sample_service.yaml`.
+
+In order to take a workload and run the lacework datacollector inside of it, three modifications need to happen **PER POD**.
+
+They are in short:
+* VolumeMount a shared empty directory to pass files back and forth
+* the lacework datacollector as an initcontainer
+* run the lacework.sh startup script that runs the datacollector, and then runs the workload's application.
 
