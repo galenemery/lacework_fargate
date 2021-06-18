@@ -26,3 +26,49 @@ They are in short:
 * the lacework datacollector as an initcontainer
 * run the lacework.sh startup script that runs the datacollector, and then runs the workload's application.
 
+The items required are outlaid here in the redis example:
+
+==========
+spec:
+      #Create an empty shared volume between the two containers
+>>    volumes:
+>>    - name: lacework-shared 
+>>      emptyDir: {}
+      # Lacework container
+>>    initContainers:
+>>    - name: lacework-sidecar
+        # Lacework sidecar image.
+        # Point the image to your appropriate sidecar image location
+        image: 950194951070.dkr.ecr.us-west-2.amazonaws.com/galen-lw-sidecar
+        command: ["/bin/sh"]
+        args: ["-c", "cp -R /shared/* /lacework"]
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /lacework
+    
+      #Application container(s) in the pod
+      containers:
+
+      - name: redis
+        image: redis:alpine
+>>      command: ["/shared/lacework.sh","docker-entrypoint.sh"]
+>>      args: ["redis-server"]
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: lacework-shared
+          mountPath: /shared
+==========
+
+The most onerous part of this setup is the `command` and `args` portion.  Its no different than ECS Fargate, but imparts a burden upon whoever manages the workloads.  If you have already explicitly defined this in your yaml, then adding lacework is simple.  pre-pend the command with `"/shared/lacework.sh"` and you're set.  If they are assumed values from the dockerfile, you *MUST* go to that file and pull them out.  Any modification to the command or args portion results in a total overwrite of both.
+
+A full workload example of this is available in the app-deployment.yaml.
+
+
+TODO: 
+- Reconfigure EKS initial setup to allow for external networking, so we can run traffic through the apps.
+- Create some yaml replacement scripting that injects the appropriate config (as much as possible) automatically.
+- Investigate utilizing a running container versus the initcontainer for multi container pods
+- Investigate what APIs work with EKS Fargate to simplify the deployment
+- Investigate an image based deployment for EKS Fargate, rather than sidecar. (Should be same as ECS fargate, but verification should occur)
